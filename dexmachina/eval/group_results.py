@@ -75,7 +75,8 @@ def compute_auc(mean_add: np.ndarray, thresholds) -> float:
         accuracies.append(acc)
     accuracies = np.array(accuracies)
     x_values = np.linspace(0, 1, len(thresholds))
-    return float(np.trapz(accuracies, x=x_values))
+    trapezoid = getattr(np, "trapezoid", None) or np.trapz
+    return float(trapezoid(accuracies, x=x_values))
 
 
 def compute_add_stats(add_data: Dict[str, np.ndarray], thresholds) -> Dict[str, Dict]:
