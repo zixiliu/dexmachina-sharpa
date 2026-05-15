@@ -1,0 +1,114 @@
+"""Sharpa hand cfg for DexMachina.
+
+Five fingers, 22 finger DOFs + 6 forearm DOFs. No mimic joints. Finger anatomy:
+  - thumb: CMC_FE, CMC_AA, MCP_FE, MCP_AA, IP            (5 dofs)
+  - index/middle/ring: MCP_FE, MCP_AA, PIP, DIP          (4 dofs each, 12 total)
+  - pinky: CMC, MCP_FE, MCP_AA, PIP, DIP                  (5 dofs)
+  - total: 22 finger + 6 wrist = 28 actuated DOFs
+
+Wrist link is `<side>_hand_C_MC` (palm/wrist body). Outer placeholder is `<side>_root`,
+introduced by `dexmachina/hand_proc/prep_sharpa.py` so `add_wrist_dof.py` could attach the
+6 forearm joints. Joint limits and gains start as best-guess copies of inspire/schunk;
+they get overridden per demo by retargeting and tuned later via `tune_gains.py`.
+"""
+
+import os
+from os.path import join
+
+from dexmachina.asset_utils import get_urdf_path
+
+sharpa_asset_dir = "sharpa_hand/"
+left_rel_urdf = join(sharpa_asset_dir, "left_sharpa_wave_6dof.urdf")
+right_rel_urdf = join(sharpa_asset_dir, "right_sharpa_wave_6dof.urdf")
+
+SHARPA_LINK_NAMES = [
+    "thumb_fingertip",
+    "index_fingertip",
+    "middle_fingertip",
+    "ring_fingertip",
+    "pinky_fingertip",
+]
+
+# 6 forearm + 22 finger zeros. Forearm initial guess matches the rough world-pose ranges
+# used by inspire (right hand near (-0.35, 0.1, 1.05), left near (0.25, 0.11, 1.0)).
+# Real wrist pose comes from demo data once retargeting is wired up.
+SHARPA_DEFAULT_QPOS = {
+    "left": [0.25, 0.11, 1.00, 0.0, 0.0, 0.0] + [0.0] * 22,
+    "right": [-0.35, 0.10, 1.05, 0.0, 0.0, 0.0] + [0.0] * 22,
+}
+
+# Forearm joint limits — same shape as inspire/schunk. The values are starting guesses;
+# the env reset overwrites them from demo data.
+_LEFT_FOREARM_LIMITS = {
+    "L_forearm_tx_link_joint": (-0.05, 0.30),
+    "L_forearm_ty_link_joint": (-0.10, 0.20),
+    "L_forearm_tz_link_joint": (1.00, 1.30),
+    "L_forearm_roll_link_joint": (-0.25, 0.50),
+    "L_forearm_pitch_link_joint": (0.20, 0.60),
+    "L_forearm_yaw_link_joint": (-0.70, 0.40),
+}
+_RIGHT_FOREARM_LIMITS = {
+    "R_forearm_tx_link_joint": (-0.40, -0.10),
+    "R_forearm_ty_link_joint": (-0.10, 0.20),
+    "R_forearm_tz_link_joint": (1.00, 1.30),
+    "R_forearm_roll_link_joint": (-0.40, 0.20),
+    "R_forearm_pitch_link_joint": (0.00, 0.60),
+    "R_forearm_yaw_link_joint": (2.50, 3.10),
+}
+
+# Actuator groups. Finger regex matches anything starting with `<side>_<finger>_`,
+# excluding the forearm joints (those use the L_/R_ prefix). kp/kv mirror inspire as
+# a reasonable Genesis default; SPIDER's MJWP work suggests Sharpa is sensitive to over-
+# stiff actuators on its small finger links — revisit via tune_gains.py once retargeting is
+# in place.
+_ACTUATORS = {
+    "finger": dict(
+        joint_exprs=[r"(left|right)_(thumb|index|middle|ring|pinky)_.*"],
+        kp=20.0,
+        kv=1.0,
+        force_range=50.0,
+    ),
+    "wrist_rot": dict(
+        joint_exprs=[r"[LR]_forearm_(roll|pitch|yaw)_link_joint"],
+        kp=80.0,
+        kv=5.0,
+        force_range=50.0,
+    ),
+    "wrist_trans": dict(
+        joint_exprs=[r"[LR]_forearm_t[xyz]_link_joint"],
+        kp=350.0,
+        kv=12.0,
+        force_range=50.0,
+    ),
+}
+
+SHARPA_LEFT_CFG = {
+    "urdf_path": get_urdf_path(left_rel_urdf),
+    "wrist_link_name": "left_hand_C_MC",
+    # Sharpa has no mimic joints in the URDF.
+    "mimic_joint_map": {},
+    "kpt_link_names": ["left_" + n for n in SHARPA_LINK_NAMES],
+    "joint_limits": _LEFT_FOREARM_LIMITS,
+    "default_qpos": SHARPA_DEFAULT_QPOS["left"],
+    "actuators": {k: v.copy() for k, v in _ACTUATORS.items()},
+    # Collision groups intentionally empty until link indices are confirmed via Genesis +
+    # `dexmachina/hand_proc/inspect_raw_urdf.py --gather_geoms`. With this empty the env
+    # falls back to the default `enable_self_collision=False` path, which is fine for a
+    # first-pass sanity run; populate before turning on grouped self-collision.
+    "collision_groups": {},
+    "collision_palm_name": "left_hand_C_MC",
+}
+
+SHARPA_RIGHT_CFG = {
+    "urdf_path": get_urdf_path(right_rel_urdf),
+    "wrist_link_name": "right_hand_C_MC",
+    "mimic_joint_map": {},
+    "kpt_link_names": ["right_" + n for n in SHARPA_LINK_NAMES],
+    "joint_limits": _RIGHT_FOREARM_LIMITS,
+    "default_qpos": SHARPA_DEFAULT_QPOS["right"],
+    "actuators": {k: v.copy() for k, v in _ACTUATORS.items()},
+    "collision_groups": {},
+    "collision_palm_name": "right_hand_C_MC",
+}
+
+SHARPA_CFGS = dict(left=SHARPA_LEFT_CFG, right=SHARPA_RIGHT_CFG)

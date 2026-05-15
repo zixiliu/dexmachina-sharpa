@@ -44,7 +44,7 @@ def get_reward_cfg(last_n_frame=-1):
         "force_penalty": 0.1,  # ~60 contact pairs in each env
         "action_penalty": 0.0,
         "objdex_baseline": False,
-        "use_retarget_contact": False,
+        "use_retarget_contact": True,
         "retarget_objframe": True, # if True, the contact is in the object frame, otherwise in the wrist frame
 
     } 
