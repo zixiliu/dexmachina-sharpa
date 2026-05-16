@@ -307,9 +307,10 @@ def main(args):
         init_step = 20 # try setting to more midair step
         assert args.target_tstep < num_steps, "Target time step should be less than total steps"
     for itr in range(args.num_iters):
-        print(f"Iteration {itr+1}/{args.num_iters}") 
+        print(f"Iteration {itr+1}/{args.num_iters}")
         print(f"Gains: kp={kp[itr]}, kv={kv[itr]}, force_range={fr[itr]}")
         set_joint_gains(args, hand_entities, tuned_dof_idxs, kp[itr], kv[itr], fr[itr])
+        iter_errors = {side: [] for side in hand_entities.keys()}
         control_set_hand_to_step(
             hand_entities, all_act_idxs, tuned_dof_idxs, init_step,
             retar_data, init_step, device, 
@@ -333,6 +334,10 @@ def main(args):
                 retar_data, t, device, env_idxs=main_env_idxs, control_joints=True
                 )
             scene.step()
+            for _side, _entity in hand_entities.items():
+                _pos = _entity.get_dofs_position(dofs_idx_local=tuned_dof_idxs[_side])
+                _err = (_pos[main_env_idxs[0]] - _pos[reference_env_idxs[0]]).abs().mean()
+                iter_errors[_side].append(_err.item())
             side = 'right'
             control_force = hand_entities[side].get_dofs_control_force(dofs_idx_local=all_act_idxs[side])[0]
             # round it to 2 decimal places
@@ -355,9 +360,15 @@ def main(args):
                 joint_qpos=obj_init_state[2][None].repeat(args.num_envs, 1), 
                 env_idxs=[0,1]
                 )
+        err_summary = " ".join(
+            f"mean_err_{s}={(sum(e)/len(e)):.4f}m std={(np.std(e)):.4f}"
+            for s, e in iter_errors.items() if e
+        )
+        print(f"  iter {itr+1}: kp={kp[itr][0].item():.2f} kv={kv[itr][0].item():.2f} {err_summary}")
         if not args.record_video:
             print(f"Current gains: \n kp={kp[itr]}, kv={kv[itr]}, force_range={fr[itr]}")
-            breakpoint()
+            if not args.auto_continue:
+                breakpoint()
         scene.reset()
     if args.record_video:
         video_path = f"{args.hand}_tuned_gains.mp4"
@@ -365,7 +376,8 @@ def main(args):
         clip = ImageSequenceClip(frames, fps=20)
         clip.write_videofile(video_path)
         print(f"Exported video to {video_path}")
-    breakpoint()
+    if not args.auto_continue:
+        breakpoint()
 
 
 
@@ -385,5 +397,7 @@ if __name__ == '__main__':
     # step_response is true, set the target time step
     parser.add_argument('--target_tstep', type=int, default=50)
     parser.add_argument('--skip_object', action='store_true')
-    args = parser.parse_args() 
+    parser.add_argument('--auto_continue', action='store_true',
+                        help='Skip breakpoints between iterations; for batch sweeps')
+    args = parser.parse_args()
     main(args)

@@ -64,20 +64,20 @@ _RIGHT_FOREARM_LIMITS = {
 _ACTUATORS = {
     "finger": dict(
         joint_exprs=[r"(left|right)_(thumb|index|middle|ring|pinky)_.*"],
-        kp=20.0,
-        kv=1.0,
+        kp=150.0,
+        kv=11.2,
         force_range=50.0,
     ),
     "wrist_rot": dict(
         joint_exprs=[r"[LR]_forearm_(roll|pitch|yaw)_link_joint"],
-        kp=80.0,
-        kv=5.0,
+        kp=300.0,
+        kv=11.2,
         force_range=50.0,
     ),
     "wrist_trans": dict(
         joint_exprs=[r"[LR]_forearm_t[xyz]_link_joint"],
-        kp=350.0,
-        kv=12.0,
+        kp=261.1,
+        kv=11.2,
         force_range=50.0,
     ),
 }
@@ -91,11 +91,14 @@ SHARPA_LEFT_CFG = {
     "joint_limits": _LEFT_FOREARM_LIMITS,
     "default_qpos": SHARPA_DEFAULT_QPOS["left"],
     "actuators": {k: v.copy() for k, v in _ACTUATORS.items()},
-    # Collision groups intentionally empty until link indices are confirmed via Genesis +
-    # `dexmachina/hand_proc/inspect_raw_urdf.py --gather_geoms`. With this empty the env
-    # falls back to the default `enable_self_collision=False` path, which is fine for a
-    # first-pass sanity run; populate before turning on grouped self-collision.
-    "collision_groups": {},
+    "collision_groups": {
+        7: 0,
+        13: 1, 23: 1, 28: 1, 33: 1,
+        14: 2, 19: 2, 24: 2, 29: 2,
+        15: 3, 20: 3, 25: 3, 30: 3,
+        16: 4, 21: 4, 26: 4, 31: 4,
+        17: 5, 22: 5, 27: 5, 32: 5, 37: 5,
+    },
     "collision_palm_name": "left_hand_C_MC",
 }
 
@@ -107,7 +110,14 @@ SHARPA_RIGHT_CFG = {
     "joint_limits": _RIGHT_FOREARM_LIMITS,
     "default_qpos": SHARPA_DEFAULT_QPOS["right"],
     "actuators": {k: v.copy() for k, v in _ACTUATORS.items()},
-    "collision_groups": {},
+    "collision_groups": {
+        7: 0,
+        13: 1, 23: 1, 28: 1, 33: 1,
+        14: 2, 19: 2, 24: 2, 29: 2,
+        15: 3, 20: 3, 25: 3, 30: 3,
+        16: 4, 21: 4, 26: 4, 31: 4,
+        17: 5, 22: 5, 27: 5, 32: 5, 37: 5,
+    },
     "collision_palm_name": "right_hand_C_MC",
 }
 

@@ -1,0 +1,83 @@
+workflow:
+  name: {{ workflow_name }}
+  resources:
+    default:
+      cpu: 16
+      gpu: 1
+      memory: 64Gi
+      storage: 100Gi
+
+  tasks:
+  - name: train
+    image: {{ image }}
+    command: [/bin/bash]
+    args: [/tmp/entry.sh]
+    files:
+    - path: /tmp/entry.sh
+      contents: |-
+        set -ex
+
+        export WANDB_API_KEY={{ wandb_key }}
+        export WANDB_ENTITY={{ wandb_entity }}
+
+        cd /workspace/dexmachina-sharpa/dexmachina
+
+        # Experiment output on persistent NFS so checkpoints survive.
+        EXP_DIR={{ base_mount }}/{{ run_name }}
+        mkdir -p $EXP_DIR
+
+        echo "Starting training: {{ run_name }}"
+        echo "  hand={{ hand }}  clip={{ clip }}  seed={{ seed }}"
+        echo "  num_envs={{ num_envs }}  max_epochs={{ max_epochs }}"
+        echo "  output: $EXP_DIR"
+
+        python -u rl/train_rl_games.py \
+            --hand {{ hand }} \
+            --clip {{ clip }} \
+            --seed {{ seed }} \
+            -B {{ num_envs }} \
+            -obf -obt \
+            --max_epochs {{ max_epochs }} \
+            --save_freq {{ save_freq }} \
+            --actuate_object --retarget_name para --horizon 16 \
+            -imw 0.5 --gain_mode all --curr_schedule uniform \
+            --wait_epochs 100 \
+            --learning_rate 0.0003 --contact_beta 10 \
+            --upper_ratios 0.9 0.9 1 --lower_ratios 0.5 0.8 1 \
+            --group_collisions --fixed_mode uniform --uniform_mode slow \
+            --action_penalty 0.01 --dialback_ep_len 80 --skip_grad --deque_len 30 \
+            --task_rew_betas 10 1 5 --use_retarget_contact \
+            --aux_reset_thres 0 0 0 --curr_rew_thres 0.6 0.01 0 0.01 \
+            -am hybrid --hybrid_scales 0.1 1.0 \
+            --kp_init 80 --kv_init 5 \
+            -imi 0.2 -bc 0 -con 2 -ert 0.6 \
+            --wandb_project {{ wandb_project }} \
+            -exp {{ exp_name }} \
+            2>&1 | tee $EXP_DIR/train.log
+
+        # Also copy out the rl_games checkpoint dir.
+        ln -s /workspace/dexmachina-sharpa/logs/rl_games $EXP_DIR/rl_games_logs || true
+        cp -r logs/rl_games/{{ hand }} $EXP_DIR/ 2>/dev/null || true
+
+        echo "Training complete. Outputs saved to $EXP_DIR"
+    outputs:
+      - dataset:
+          name: dexmachina-sharpa:{{ run_name }}
+          path: {{ base_mount }}/{{ run_name }}
+
+default-values:
+  workflow_name: dexmachina-sharpa-train
+  image: nvcr.io/nvstaging/isaac-amr/dexmachina-sharpa:v1
+  # Pass via `osmo workflow submit --set wandb_key=<your_key>` — never commit a literal.
+  wandb_key: ""
+  wandb_entity: nvidia-isaac
+  wandb_project: v2d-dexmachina-sharpa-repro
+  base_mount: /mnt/amlfs-01/home/shalinj/training_outputs/dexmachina-sharpa-repro
+  hand: sharpa_hand
+  clip: box-30-230-s01-u01
+  seed: 42
+  num_envs: 4096
+  max_epochs: 5000
+  save_freq: 500
+  exp_name: f422
+  run_name: sharpa-f422-box30-230-s01-u01-seed42
