@@ -199,19 +199,24 @@ Lesson: smoke-test image with the *actual train script entrypoint*, not just imp
 
 ### 2026-05-17/18 — eval + retargeting fix
 
-**Eval results show large gap from paper baselines.**
-- Workflow `sharpa-f422-eval-2` (34 of 35 runs, one training failure) computed AUC-ADD per (clip, seed). Sharpa column vs paper-reproduced "Ours" values (`REPRO_REPORT.md`):
+**Eval results show large gap from paper baselines. Reference baseline before retargeting fix.**
 
-  | Clip | Inspire | Allegro | XHand | Schunk | **Sharpa (ours)** |
-  |---|---|---|---|---|---|
-  | ketchup30-130 | 0.707 | 0.914 | 0.904 | 0.897 | **0.159** |
-  | box30-230     | 0.871 | 0.886 | 0.865 | 0.859 | **0.255** |
-  | mixer30-200   | 0.898 | 0.773 | 0.898 | 0.903 | **0.209** |
-  | ketchup40-340 | 0.323 | 0.830 | 0.724 | 0.700 | **0.039** |
-  | mixer40-340   | 0.643 | 0.811 | 0.662 | 0.668 | **0.090** |
-  | notebook40-340 | 0.712 | 0.871 | 0.890 | 0.696 | **0.032** |
-  | waffleiron40-340 | 0.238 | 0.754 | 0.803 | 0.414 | **0.061** |
-- Std across seeds was small (≤0.07), so the gap is systematic.
+- Sweep:  `sharpa-f422-sweep-3` (35 jobs, image `:v2`, body-frame-asymmetric retargeting). Training: ~8 hrs, 34/35 completed (ketchup-40-340-seed24 crashed mid-training).
+- Eval:   `sharpa-f422-eval-2` (34 / 5 seeds per clip, except ketchup-40-340 which has 4). AUC-ADD computed per (clip, seed) via `dexmachina.eval.compute_add` + the 4-env eval rollout from `eval_rl_games`.
+
+  | Clip | Inspire | Allegro | XHand | Schunk | **Sharpa sweep-3** (AUC ± std) | Train-end reward |
+  |---|---|---|---|---|---|---|
+  | ketchup30-130    | 0.707 | 0.914 | 0.904 | 0.897 | **0.159 ± 0.012** | 63 – 65 |
+  | box30-230        | 0.871 | 0.886 | 0.865 | 0.859 | **0.255 ± 0.067** | 125 – 155 |
+  | mixer30-200      | 0.898 | 0.773 | 0.898 | 0.903 | **0.209 ± 0.007** | 108 – 117 |
+  | ketchup40-340    | 0.323 | 0.830 | 0.724 | 0.700 | **0.039 ± 0.001** (n=4) | ~12 (lowest) |
+  | mixer40-340      | 0.643 | 0.811 | 0.662 | 0.668 | **0.090 ± 0.009** | 164 – 207 (highest) |
+  | notebook40-340   | 0.712 | 0.871 | 0.890 | 0.696 | **0.032 ± 0.010** | 20 – 21 |
+  | waffleiron40-340 | 0.238 | 0.754 | 0.803 | 0.414 | **0.061 ± 0.005** | 26 – 52 |
+
+- Std across seeds was small (≤0.07) — gap is systematic, not seed noise.
+- Training reward and eval AUC are loosely correlated, not 1:1. The reward includes imitation + contact terms which are reproducible even when the policy doesn't actually move the object (the AUC-ADD signal). High training reward + low AUC = policy matches the reference joint state but doesn't physically grip / manipulate the object.
+- Re-run target after the retargeting fix: `sharpa-f422-sweep-4` (image `:v4`, body-frame-corrected retargeting). Expected AUC: should approach paper's 0.5 – 0.9 range if the diagnosis is right; if still ≤0.3, the body-frame fix wasn't the main bottleneck and we revisit.
 
 **Diagnostic dive: retargeting reference (not policy) is the culprit.**
 - Pulled 4-env eval videos from cluster via base64-tunneled `osmo workflow logs` (per-task `{{output}}` uploads land in `AUTH_team-osmo-ops` Swift namespace we don't have read access to). Hack documented in `workflow/collect_videos.yaml`.
