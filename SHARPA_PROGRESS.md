@@ -197,6 +197,45 @@ Lesson: smoke-test image with the *actual train script entrypoint*, not just imp
 - Watch the sweep progress; intervene if any tasks fail.
 - Eval + Figure-3 column extension (step I).
 
+### 2026-05-17/18 — eval + retargeting fix
+
+**Eval results show large gap from paper baselines.**
+- Workflow `sharpa-f422-eval-2` (34 of 35 runs, one training failure) computed AUC-ADD per (clip, seed). Sharpa column vs paper-reproduced "Ours" values (`REPRO_REPORT.md`):
+
+  | Clip | Inspire | Allegro | XHand | Schunk | **Sharpa (ours)** |
+  |---|---|---|---|---|---|
+  | ketchup30-130 | 0.707 | 0.914 | 0.904 | 0.897 | **0.159** |
+  | box30-230     | 0.871 | 0.886 | 0.865 | 0.859 | **0.255** |
+  | mixer30-200   | 0.898 | 0.773 | 0.898 | 0.903 | **0.209** |
+  | ketchup40-340 | 0.323 | 0.830 | 0.724 | 0.700 | **0.039** |
+  | mixer40-340   | 0.643 | 0.811 | 0.662 | 0.668 | **0.090** |
+  | notebook40-340 | 0.712 | 0.871 | 0.890 | 0.696 | **0.032** |
+  | waffleiron40-340 | 0.238 | 0.754 | 0.803 | 0.414 | **0.061** |
+- Std across seeds was small (≤0.07), so the gap is systematic.
+
+**Diagnostic dive: retargeting reference (not policy) is the culprit.**
+- Pulled 4-env eval videos from cluster via base64-tunneled `osmo workflow logs` (per-task `{{output}}` uploads land in `AUTH_team-osmo-ops` Swift namespace we don't have read access to). Hack documented in `workflow/collect_videos.yaml`.
+- Rendered `map_contacts.py --record_video --render_only` locally for the 6 source clips → `~/Desktop/sharpa_videos/contact_*.mp4`. **Right hand looked intermittently off**, especially on rotation-heavy moments; left was fine.
+- DOF + mimic-joint comparison across hands surfaced a hint: Sharpa has **28 effective DOFs with 0 mimic joints** (largest action space in the repo). Allegro at 22 / Inspire at 12 / Schunk at 15 all train cleanly. Likely contributes but not the immediate cause of "right hand wonky".
+
+**Root cause: 180° body-frame rotation between left and right `*_hand_C_MC` in the raw Sharpa URDFs.**
+- Left has `(X=right, Y=down, Z=fwd)`; right has `(X=left, Y=up, Z=fwd)`. That's an X/Y flip preserving Z = 180° rotation about Z.
+- Inherited from robotic_grounding's raw URDFs; not a typical mirror-symmetric robotic hand. Compounded by inspire-copied `joint_limits` on `R_forearm_yaw_link_joint` that pinned right yaw to a 0.6 rad sector (vs left's 1.1 rad), creating intermittent "stuck wrist" artifacts when retargeted demos demanded more rotation.
+
+**Three-step retargeting fix.**
+1. **Remove inspire-tuned joint limits** (sharpa.py): left `_LEFT_FOREARM_LIMITS` and `_RIGHT_FOREARM_LIMITS` set to `{}`. Defaults now inherit URDF's ±2π rotation / ±2 m translation, matching allegro/xhand/schunk's no-override convention. (v2 retargeting — partial improvement, right hand still mirror-asymmetric.)
+2. **First URDF rotation attempt (FAILED).** Added `rpy="0 0 π"` to the scaffold's fixed joint *before* the forearm chain. Position broke: both hands ended up at +X (same side of body) because the prismatic forearm joints' axes also got rotated, and dex_retargeting's optimizer landed in a wrong basin. (v3.)
+3. **Post-joint rotation (WORKS).** `_rotate_right_wrist_frame` in `prep_sharpa.py`: after `add_forearm_dof` builds the 6-DOF right URDF, post-process to insert an intermediate `R_wrist_pre_link` between `R_forearm_yaw_link` and `right_hand_C_MC`, with a fixed-rotation joint carrying the 180° Z. Forearm tx/ty/tz stay world-axis-aligned, only the wrist body frame is rotated. (v4 — visually correct, mirror-symmetric.)
+
+**State at end of v4.**
+- New retargeted .pt / contact_retarget .npy / retargeter_results .npy files written for all 6 source demos.
+- `right_sharpa_wave_6dof.urdf` now has `R_wrist_pre_link` + `R_wrist_rotation_joint` (rpy="0 0 π").
+- Contact videos at `~/Desktop/sharpa_videos/contact_v4/contact_*.mp4` — visually mirror-symmetric, right wrist behaves like a proper mirror of left.
+
+**Next.**
+- Re-train all 34 (or 35 if we retry the failed seed) RL runs on the new retargeted data with the fixed URDF.
+- Re-eval and compare Sharpa column to paper baselines.
+
 ## Runbook — key commands
 
 Canonical commands for each pipeline step. Update with any flag changes or new steps.

@@ -37,24 +37,17 @@ SHARPA_DEFAULT_QPOS = {
     "right": [-0.35, 0.10, 1.05, 0.0, 0.0, 0.0] + [0.0] * 22,
 }
 
-# Forearm joint limits — same shape as inspire/schunk. The values are starting guesses;
-# the env reset overwrites them from demo data.
-_LEFT_FOREARM_LIMITS = {
-    "L_forearm_tx_link_joint": (-0.05, 0.30),
-    "L_forearm_ty_link_joint": (-0.10, 0.20),
-    "L_forearm_tz_link_joint": (1.00, 1.30),
-    "L_forearm_roll_link_joint": (-0.25, 0.50),
-    "L_forearm_pitch_link_joint": (0.20, 0.60),
-    "L_forearm_yaw_link_joint": (-0.70, 0.40),
-}
-_RIGHT_FOREARM_LIMITS = {
-    "R_forearm_tx_link_joint": (-0.40, -0.10),
-    "R_forearm_ty_link_joint": (-0.10, 0.20),
-    "R_forearm_tz_link_joint": (1.00, 1.30),
-    "R_forearm_roll_link_joint": (-0.40, 0.20),
-    "R_forearm_pitch_link_joint": (0.00, 0.60),
-    "R_forearm_yaw_link_joint": (2.50, 3.10),
-}
+# Forearm joint limits left empty so the env inherits the URDF defaults (±2 m
+# translation, ±2π rotation), matching allegro / xhand / schunk. Previously this
+# was a verbatim copy of inspire's tight bounds, which had an L/R yaw offset
+# tailored to inspire's mirror-symmetric URDF. Sharpa's URDF is not
+# mirror-symmetric (right body Z is flipped ~180° about Y), so the inspire offset
+# compounded the body-frame mismatch — pinning the right hand's wrist into a 0.6
+# rad sector and causing intermittent "stuck wrist" failures in retargeting on
+# rotation-heavy moments. Without these overrides the retargeter is free to find
+# whatever wrist orientation matches the MANO target.
+_LEFT_FOREARM_LIMITS = {}
+_RIGHT_FOREARM_LIMITS = {}
 
 # Actuator groups. Finger regex matches anything starting with `<side>_<finger>_`,
 # excluding the forearm joints (those use the L_/R_ prefix). kp/kv mirror inspire as

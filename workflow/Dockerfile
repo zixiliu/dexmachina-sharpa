@@ -50,7 +50,7 @@ RUN pip install --no-cache-dir \
         ray==2.47.0 \
         tensorboardx==2.6.2.2 \
         dex-retargeting==0.5.0 \
-        moviepy==2.2.1 \
+        moviepy==1.0.3 \
         scikit-learn \
         seaborn==0.13.2 \
         trimesh==4.6.11 \

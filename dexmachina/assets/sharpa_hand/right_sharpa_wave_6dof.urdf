@@ -1,3 +1,4 @@
+<?xml version='1.0' encoding='UTF-8'?>
 <robot name="right_sharpa_wave">
   <link name="right_root">
     <inertial>
@@ -53,7 +54,7 @@
   </link>
   <joint name="R_forearm_yaw_link_joint" type="revolute">
     <parent link="R_forearm_yaw_link"/>
-    <child link="right_hand_C_MC"/>
+    <child link="R_wrist_pre_link"/>
     <axis xyz="0 -1 0"/>
     <limit lower="-6.2" upper="6.2" effort="100" velocity="5"/>
   </joint>
@@ -917,5 +918,17 @@
     <parent link="right_pinky_elastomer"/>
     <child link="right_pinky_fingertip"/>
     <axis xyz="0 0 0"/>
+  </joint>
+  <link name="R_wrist_pre_link">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="0.001"/>
+      <inertia ixx="1e-6" ixy="0" ixz="0" iyy="1e-6" iyz="0" izz="1e-6"/>
+    </inertial>
+  </link>
+  <joint name="R_wrist_rotation_joint" type="fixed">
+    <parent link="R_wrist_pre_link"/>
+    <child link="right_hand_C_MC"/>
+    <origin xyz="0 0 0" rpy="0 0 3.14159265"/>
   </joint>
 </robot>
